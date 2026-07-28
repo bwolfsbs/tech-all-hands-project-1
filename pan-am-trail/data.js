@@ -114,35 +114,43 @@ const LANDMARKS = [
 ];
 
 const VEHICLES = [
-  { id:"ev",   name:"\"Sparky\" — Electric Crossover", cost:12000,
-    tank:75, range:420, speed:1.0, cargo:140, rel:0.95, fuelName:"charge", fuelUnit:"kWh", fuelPrice:0.4,
-    blurb:"Cheap to charge, nearly unbreakable. But chargers get scarce in the empty places." },
+  { id:"ev",   name:"\"Sparky\" — Electric Crossover", cost:10500,
+    ops:12, speed:1.0, cargo:140, rel:0.95,
+    blurb:"Dirt cheap to run and nearly unbreakable — until the software sulks. Chargers get weird in the empty places." },
   { id:"van",  name:"\"La Tortuga\" — Diesel Camper Van", cost:9000,
-    tank:90, range:900, speed:1.0, cargo:250, rel:0.85, fuelName:"diesel", fuelUnit:"L", fuelPrice:1.5,
-    blurb:"The classic. Big tank, big cargo, sleeps five if nobody breathes too deeply." },
+    ops:32, speed:1.0, cargo:250, rel:0.85,
+    blurb:"The classic. Thirsty but dependable, big cargo, sleeps five if nobody breathes too deeply." },
   { id:"moto", name:"\"Colibrí\" — Adventure Motorcycle Convoy", cost:5000,
-    tank:40, range:400, speed:1.25, cargo:70, rel:0.8, fuelName:"gasoline", fuelUnit:"L", fuelPrice:1.6,
-    blurb:"Fast, nimble, cheap. Carries almost nothing and the rain finds everyone." },
-  { id:"bus",  name:"\"El Jefe\" — 1978 School Bus Conversion", cost:6500,
-    tank:150, range:700, speed:0.8, cargo:500, rel:0.68, fuelName:"diesel", fuelUnit:"L", fuelPrice:1.5,
-    blurb:"A rolling home with a wood stove. Slow, thirsty, breaks down with charisma. Comfy though (+health)." }
+    ops:18, speed:1.25, cargo:70, rel:0.8,
+    blurb:"Fast, nimble, sips fuel. Carries almost nothing and the rain finds everyone." },
+  { id:"bus",  name:"\"El Jefe\" — 1978 School Bus Conversion", cost:5500,
+    ops:15, speed:0.8, cargo:500, rel:0.62, comfy:true,
+    blurb:"Cheap to run, comfy as a living room (+health), and absolutely full of gremlins. You will learn their names." }
 ];
 
 const OCCUPATIONS = [
   { id:"nomad",    name:"Trust-Fund Nomad",          cash:20000, mult:1,
     blurb:"Money is no object. Glory, however, is scored accordingly." },
   { id:"dev",      name:"Remote Software Developer", cash:12000, mult:2,
-    blurb:"Can pick up freelance gigs anywhere with wifi. Standups from a hammock." },
+    blurb:"Freelance gigs anywhere with wifi. Speaks fluent EV — Sparky's gremlins are just bugs." },
   { id:"vlogger",  name:"Travel Vlogger",            cash:8000,  mult:2.5,
-    blurb:"Sometimes goes viral. Ad money follows. The algorithm is fickle." },
-  { id:"mechanic", name:"Retired Mechanic",          cash:6000,  mult:3,
-    blurb:"Fixes anything with a wrench and disdain. Breakdowns fear you." }
+    blurb:"Sometimes goes viral. Quirky rigs (the bus, the motos) are content gold — gigs pay more." },
+  { id:"mechanic", name:"Retired Mechanic",          cash:7000,  mult:3,
+    blurb:"Keeps anything alive: cheaper running costs, half the breakdowns. Old iron like El Jefe holds no secrets." }
 ];
+
+// side gigs: spend a day, earn money (occupation-flavored)
+const GIGS = {
+  nomad:    { name:"sell vintage band tees out of the rig",          low:50,  high:180 },
+  dev:      { name:"squash a stranger's bugs over cafe wifi",        low:200, high:500 },
+  vlogger:  { name:"shoot a sponsored segment for a gear brand",     low:100, high:600 },
+  mechanic: { name:"wrench on local vehicles in a borrowed bay",     low:150, high:400 }
+};
 
 const GEAR = [
   { id:"filter",   name:"Water Filter",        cost:150, blurb:"Halves your odds of dysentery and stomach bugs." },
   { id:"bugspray", name:"Bug Spray & Nets",    cost:100, blurb:"Halves your odds of dengue fever." },
-  { id:"satphone", name:"Satellite Phone",     cost:400, blurb:"Free rescue when stranded. Worth it once." },
+  { id:"satphone", name:"Satellite Phone",     cost:400, blurb:"Summons help fast when the rig dies somewhere lonely — halves breakdown delays." },
   { id:"rack",     name:"Roof Rack",           cost:250, blurb:"+80 kg cargo capacity." }
 ];
 
