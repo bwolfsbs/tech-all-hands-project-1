@@ -205,7 +205,7 @@ function newState() {
     crew: [],
     km: 0, day: 1, nextLm: 1,
     pace: 1, rations: 1, morale: 80,
-    fuel: 0, vehHp: 100,
+    vehHp: 100,
     paused: true, weather: "sunny",
     stats: { deaths: 0, breakdowns: 0, diseases: 0, foraged: 0 },
     mode: "travel"
@@ -218,6 +218,16 @@ const veh = () => VEHICLES.find(v => v.id === G.vehicle);
 const alive = () => G.crew.filter(c => c.alive);
 const cargoCap = () => veh().cargo + (G.gear.rack ? 80 : 0);
 const curMonth = () => (G.month + Math.floor((G.day - 1) / 30)) % 12;
+
+// occupation × vehicle chemistry
+const hasAffinity = () =>
+  (G.occ === "mechanic" && G.vehicle === "bus") || (G.occ === "dev" && G.vehicle === "ev");
+function opsToday() {
+  let o = veh().ops;
+  if (G.occ === "mechanic") o *= 0.85;          // keeps anything running lean
+  if (G.occ === "dev" && G.vehicle === "ev") o *= 0.7; // scripts the charging apps
+  return Math.round(o);
+}
 
 // ---------- dialog ----------
 let dialogKeyMap = [];
@@ -289,8 +299,9 @@ function setupVehicle() {
   let html = `<h2>CHOOSE YOUR RIG</h2><p class="sub">You have ${money(G.money)}</p><div class="menu">`;
   VEHICLES.forEach((v, i) => {
     const afford = G.money >= v.cost;
+    const affinity = (G.occ === "mechanic" && v.id === "bus") || (G.occ === "dev" && v.id === "ev");
     html += `<button data-key="${i + 1}" ${afford ? "" : "disabled"} onclick="pickVehicle(${i})">${i + 1}. ${v.name} — ${money(v.cost)}<br>
-      <span style="font-weight:normal;font-size:12px;color:#999">${v.blurb}<br>range ${v.range} km &middot; speed x${v.speed} &middot; cargo ${v.cargo} kg</span></button>`;
+      <span style="font-weight:normal;font-size:12px;color:#999">${v.blurb}<br>${money(v.ops)}/day to run &middot; speed x${v.speed} &middot; cargo ${v.cargo} kg</span>${affinity ? `<br><span style="font-size:12px;color:#7ddc5e">&#9733; You know this machine inside and out.</span>` : ""}</button>`;
   });
   html += `</div>`;
   setupBody(html);
@@ -300,7 +311,6 @@ function pickVehicle(i) {
   const v = VEHICLES[i];
   G.vehicle = v.id;
   G.money -= v.cost;
-  G.fuel = v.tank;
   setupCrew();
 }
 
@@ -333,20 +343,14 @@ function priceMult() {
   return ["patagonia", "atacama", "tundra", "boreal", "andes"].includes(r) ? 1.5 : 1.0;
 }
 function buildShop(isSetup) {
-  const v = veh();
   const pm = isSetup ? 1.0 : priceMult();
-  shopPrices = { food: 4 * pm, fuel: v.fuelPrice * pm, part: 120 * pm, medkit: 60 * pm };
-  const fuelPct = Math.round((G.fuel / v.tank) * 100);
-  const fillCost = Math.ceil((v.tank - G.fuel) * shopPrices.fuel);
+  shopPrices = { food: 4 * pm, part: 120 * pm, medkit: 60 * pm };
   let html = `<h2>${isSetup ? "OUTFITTER — USHUAIA" : "SUPPLIES"}</h2>
-    <p class="sub">Money: <span id="shop-money">${money(G.money)}</span> &middot; cargo ${Math.round(G.food)} / ${cargoCap()} kg</p>
+    <p class="sub">Money: <span id="shop-money">${money(G.money)}</span> &middot; cargo ${Math.round(G.food)} / ${cargoCap()} kg &middot; rig costs ${money(opsToday())}/day to run</p>
     <div class="box">
     <div class="shoprow"><span>Food — ${money(shopPrices.food)}/kg</span>
       <span class="qtybtns"><button onclick="buy('food',-10)">-10</button><button onclick="buy('food',10)">+10</button><button onclick="buy('food',25)">+25</button></span>
       <span class="qty" id="shop-food">${Math.round(G.food)} kg</span></div>
-    <div class="shoprow"><span>${v.fuelName} — ${money(shopPrices.fuel)}/${v.fuelUnit}</span>
-      <span class="qtybtns"><button onclick="fillTank()">Fill (${money(fillCost)})</button></span>
-      <span class="qty" id="shop-fuel">${fuelPct}%</span></div>
     <div class="shoprow"><span>Spare parts — ${money(shopPrices.part)}</span>
       <span class="qtybtns"><button onclick="buy('part',-1)">-1</button><button onclick="buy('part',1)">+1</button></span>
       <span class="qty" id="shop-parts">${G.parts}</span></div>
@@ -387,19 +391,6 @@ function buy(what, n) {
     if (what === "part") G.parts += n;
     if (what === "medkit") G.medkits += n;
   }
-  sfx.pickup();
-  refreshShop();
-}
-function fillTank() {
-  const v = veh();
-  const need = v.tank - G.fuel;
-  const cost = Math.ceil(need * shopPrices.fuel);
-  if (need <= 0.5) { sfx.bad(); return; }
-  if (G.money < cost) {
-    const afford = Math.floor(G.money / shopPrices.fuel);
-    if (afford <= 0) { sfx.bad(); return; }
-    G.money -= afford * shopPrices.fuel; G.fuel += afford;
-  } else { G.money -= cost; G.fuel = v.tank; }
   sfx.pickup();
   refreshShop();
 }
@@ -465,17 +456,22 @@ function dayTick() {
   if (G.weather === "storm") kmToday *= 0.6;
   else if (G.weather === "rain" || G.weather === "snow") kmToday *= 0.8;
   if (G.vehHp < 40) kmToday *= 0.7;
-  kmToday = Math.round(kmToday);
 
-  // fuel
-  const fuelUsed = (kmToday / v.range) * v.tank;
-  if (G.fuel <= 0) { strandedEvent(); return; }
-  if (fuelUsed > G.fuel) {
-    kmToday = Math.round((G.fuel / v.tank) * v.range);
-    G.fuel = 0;
+  // daily operating cost — you're an expert; fuel takes care of itself, the bill doesn't
+  const ops = opsToday();
+  if (G.money >= ops) {
+    G.money -= ops;
   } else {
-    G.fuel -= fuelUsed;
+    G.money = 0;
+    kmToday *= 0.6; // limping on favors and fumes
+    G.morale = clamp(G.morale - 2, 0, 100);
+    if (Math.random() < 0.35) {
+      queueDialog("RUNNING ON EMPTY (FINANCIALLY)",
+        `<span class="bad">You can't cover the rig's daily costs. You're limping along on favors, coasting downhills, and dignity.\n\nStop for a side gig (G) to refill the wallet.</span>`);
+      pauseTravel();
+    }
   }
+  kmToday = Math.round(kmToday);
 
   // move, but stop at next landmark
   const lm = LANDMARKS[G.nextLm];
@@ -643,6 +639,7 @@ function vehicleWear() {
   G.vehHp = clamp(G.vehHp - rf(0.2, 0.8), 0, 100);
   let bChance = (1 - v.rel) * 0.09 + (G.vehHp < 50 ? 0.03 : 0);
   if (G.occ === "mechanic") bChance *= 0.5;
+  if (G.occ === "dev" && v.id === "ev") bChance *= 0.5;
   if (Math.random() < bChance) breakdown();
 }
 
@@ -658,6 +655,18 @@ function breakdown() {
     v.id === "ev" ? "The battery management system displays an error in a font you've never seen before." : "The engine coughs, sighs, and takes a personal day."
   ]);
   const opts = [];
+  if (hasAffinity()) {
+    opts.push({
+      label: G.vehicle === "ev" ? "SSH in and reboot it (free — it's always software)" : "You know this bus. Fix it. (free)",
+      fn: () => {
+        G.vehHp = clamp(G.vehHp + 20, 0, 100);
+        queueDialog("HANDLED", G.vehicle === "ev"
+          ? `<span class="good">Forty minutes, one firmware rollback, and a strongly-worded bug report later, Sparky purrs back to life. It was, as always, software.</span>`
+          : `<span class="good">You've met this gremlin before. Two taps of the wrench, one percussive adjustment, and El Jefe rumbles awake, mildly embarrassed.</span>`);
+        afterDialog();
+      }
+    });
+  }
   if (G.parts > 0) {
     opts.push({
       label: `Fix it with a spare part (${G.parts} left)`, fn: () => {
@@ -671,50 +680,16 @@ function breakdown() {
       }
     });
   }
+  const waitDays = G.gear.satphone ? 1 : 2;
   opts.push({
-    label: "Wait for a local mechanic (2 days, ~$250)", fn: () => {
+    label: `Wait for a local mechanic (${waitDays} day${waitDays > 1 ? "s" : ""}, ~$250)`, fn: () => {
       const cost = Math.min(G.money, 250);
-      G.money -= cost; G.day += 2; G.vehHp = clamp(G.vehHp + 40, 0, 100);
-      queueDialog("REPAIRED", `A mechanic materializes, diagnoses it in nine seconds, and fixes it with a wrench older than the vehicle. (${money(cost)}, 2 days)`);
+      G.money -= cost; G.day += waitDays; G.vehHp = clamp(G.vehHp + 40, 0, 100);
+      queueDialog("REPAIRED", `A mechanic ${G.gear.satphone ? "answers the sat phone and arrives by morning" : "materializes eventually"}, diagnoses it in nine seconds, and fixes it with a wrench older than the vehicle. (${money(cost)}, ${waitDays} day${waitDays > 1 ? "s" : ""})`);
       afterDialog();
     }
   });
   dialog("BREAKDOWN", `<span class="bad">${flavor}</span>`, opts);
-}
-
-function strandedEvent() {
-  pauseTravel();
-  sfx.bad();
-  const v = veh();
-  const isEV = v.id === "ev";
-  const opts = [];
-  if (G.gear.satphone) {
-    opts.push({
-      label: "Call for rescue (sat phone, 1 day)", fn: () => {
-        G.day += 1; G.fuel = v.tank * 0.4;
-        queueDialog("RESCUED", `<span class="good">The satellite phone earns its keep. A truck arrives with ${isEV ? "a generator" : "fuel"} and mild judgment. (1 day)</span>`);
-        afterDialog();
-      }
-    });
-  }
-  opts.push({
-    label: `Flag down help (~$200, 1 day)`, fn: () => {
-      const cost = Math.min(G.money, 200);
-      G.money -= cost; G.day += 1; G.fuel = v.tank * 0.35;
-      queueDialog("HELPED", `A passing trucker ${isEV ? "tows you to a charger" : "sells you a jerrycan"} and tells a long story you politely endure. (${money(cost)}, 1 day)`);
-      afterDialog();
-    }
-  });
-  opts.push({
-    label: "Walk to the next station (2 days, rough)", fn: () => {
-      G.day += 2; G.fuel = v.tank * 0.3;
-      alive().forEach(c => c.hp = clamp(c.hp - 8, 0, 100));
-      queueDialog("THE LONG WALK", `<span class="bad">Two days of walking, hitching, and reevaluating life choices. Everyone is worn down, but you're moving again.</span>`);
-      afterDialog();
-    }
-  });
-  dialog("OUT OF " + (isEV ? "CHARGE" : "FUEL"),
-    `<span class="bad">The ${isEV ? "battery hits 0% with a sad little chime" : "tank runs dry mid-nowhere"}. The road is empty in both directions.</span>`, opts);
 }
 
 // ---------- random events ----------
@@ -751,7 +726,7 @@ function randomEvent() {
     const animal = { patagonia: "a guanaco", andes: "a llama with main-character energy", boreal: "a moose", tundra: "a caribou herd", mexdesert: "loose cattle", plains: "a deer" }[region] || "a very casual dog";
     queueDialog("WILDLIFE ON THE ROAD", `You swerve around ${animal}. The vehicle finds the rough shoulder. Everyone is fine; the suspension files a grievance.`);
   });
-  if (veh().id === "ev") add(3, () => {
+  if (veh().id === "ev") add(G.occ === "dev" ? 1 : 3, () => {
     G.day += 1;
     queueDialog("CHARGING DESERT", `<span class="bad">The app says there's a charger here. The app lies. You limp to a hardware store and trickle-charge overnight from a wall socket while the owner watches, fascinated. (Lost 1 day)</span>`);
   });
@@ -760,7 +735,8 @@ function randomEvent() {
     queueDialog("LANDSLIDE", `<span class="bad">The mountain has rearranged the road. Crews wave traffic through one lane, eventually, in a geological sense of 'eventually'.</span>`);
   });
   if (G.occ === "vlogger") add(3, () => {
-    const cash = ri(150, 700);
+    let cash = ri(150, 700);
+    if (G.vehicle === "bus" || G.vehicle === "moto") cash = Math.round(cash * 1.5); // quirky rig = content gold
     G.money += cash;
     sfx.good();
     queueDialog("GONE VIRAL", `<span class="good">Your video "we tried ${pick(["street food", "sleeping in the rig", "a border crossing", "driving the switchbacks"])} and it changed us" pops off. Ad revenue: ${money(cash)}.</span>`);
@@ -892,6 +868,7 @@ function showStatus() {
   });
   html += `</div><br><div class="statgrid">
     <span>Vehicle</span><span>${Math.round(G.vehHp)}% — ${v.name.split("—")[0].trim()}</span>
+    <span>Running cost</span><span>${money(opsToday())}/day${hasAffinity() ? " ★" : ""}</span>
     <span>Morale</span><span>${moraleWord()}</span>
     <span>Pace</span><span>${PACES[G.pace].name}</span>
     <span>Rations</span><span>${RATIONS[G.rations].name}</span>
@@ -924,6 +901,20 @@ function cycleRations() {
   pauseTravel();
 }
 
+function sideGig() {
+  if (G.screen !== "screen-travel" || G.mode !== "travel") return;
+  pauseTravel();
+  G.day += 1;
+  consumeFoodOnly();
+  const gig = GIGS[G.occ];
+  let pay = ri(gig.low, gig.high);
+  if (G.occ === "vlogger" && (G.vehicle === "bus" || G.vehicle === "moto")) pay = Math.round(pay * 1.5);
+  G.money += pay;
+  updateHud();
+  sfx.good();
+  queueDialog("SIDE GIG", `<span class="good">You stop for a day to ${gig.name}. It pays ${money(pay)}.</span> (1 day)`);
+}
+
 function restDay() {
   if (G.screen !== "screen-travel") return;
   pauseTravel();
@@ -947,7 +938,8 @@ function updateHud() {
   $("hud-weather").textContent = weatherLabel();
   $("hud-next").textContent = lm ? `NEXT: ${lm.name.split(",")[0]} ${Math.max(0, Math.round(lm.km - G.km))} km` : "";
   $("hud-money").textContent = money(G.money);
-  $("hud-fuel").textContent = `${v.fuelName.toUpperCase()} ${Math.round((G.fuel / v.tank) * 100)}%`;
+  $("hud-fuel").textContent = `OPS ${money(opsToday())}/DAY`;
+  $("hud-fuel").style.color = G.money < opsToday() * 5 ? "var(--red)" : "";
   $("hud-food").textContent = `FOOD ${Math.round(G.food)}kg`;
   $("hud-parts").textContent = `PARTS ${G.parts} · MEDKITS ${G.medkits}`;
   const avg = alive().length ? alive().reduce((s, c) => s + c.hp, 0) / alive().length : 0;
