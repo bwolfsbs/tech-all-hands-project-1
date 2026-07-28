@@ -218,6 +218,12 @@ const veh = () => VEHICLES.find(v => v.id === G.vehicle);
 const alive = () => G.crew.filter(c => c.alive);
 const cargoCap = () => veh().cargo + (G.gear.rack ? 80 : 0);
 const curMonth = () => (G.month + Math.floor((G.day - 1) / 30)) % 12;
+const isImmune = (c, disId) => !!(c.immune && c.immune[disId]);
+function recoverFrom(c) {
+  const dis = DISEASES.find(d => d.id === c.sick);
+  if (dis && dis.immunizes) (c.immune = c.immune || {})[dis.id] = true;
+  c.sick = null;
+}
 
 // occupation × vehicle chemistry
 const hasAffinity = () =>
@@ -330,7 +336,7 @@ function confirmCrew() {
   G.crew = [];
   for (let i = 0; i < 5; i++) {
     const name = ($("crew-" + i).value.trim() || "Traveler " + (i + 1)).slice(0, 12);
-    G.crew.push({ name, hp: 100, alive: true, sick: null, sickDays: 0 });
+    G.crew.push({ name, hp: 100, alive: true, sick: null, sickDays: 0, immune: {} });
   }
   setupShop();
 }
@@ -515,8 +521,8 @@ function consumeAndHeal() {
       d -= dis.dmg;
       c.sickDays--;
       if (c.sickDays <= 0) {
-        queueDialog("RECOVERY", `<span class="good">${c.name} has recovered from ${dis.name}.</span>`);
-        c.sick = null;
+        queueDialog("RECOVERY", `<span class="good">${c.name} has recovered from ${dis.name}.${dis.immunizes ? " Their immune system has taken detailed notes — they won't be catching that again." : ""}</span>`);
+        recoverFrom(c);
       }
     }
     // weather exposure
@@ -565,9 +571,10 @@ function diseaseRolls() {
     if (c.hp < 40) chance += 0.015;
     if (Math.random() > chance) return;
 
-    // pick a disease, weighted; gear halves specific ones
+    // pick a disease, weighted; gear halves specific ones; immunity rules some out
     let pool = [];
     candidates.forEach(d => {
+      if (isImmune(c, d.id)) return;
       let w = d.weight;
       if (d.id === "heat" && G.weather !== "scorching") w *= 0.3;
       if (d.id === "hypo" && !["snow", "blizzard"].includes(G.weather)) w *= 0.2;
@@ -578,11 +585,12 @@ function diseaseRolls() {
     infect(c, pick(pool));
   });
 
-  // contagion
+  // contagion — recovered crew are immune to what they've already survived
   const sickNoro = alive().filter(c => c.sick === "noro" || c.sick === "dysentery");
   if (sickNoro.length) {
-    alive().filter(c => !c.sick).forEach(c => {
-      if (Math.random() < 0.12 * sickNoro.length) infect(c, DISEASES.find(d => d.id === sickNoro[0].sick));
+    const spreading = sickNoro[0].sick;
+    alive().filter(c => !c.sick && !isImmune(c, spreading)).forEach(c => {
+      if (Math.random() < 0.12 * sickNoro.length) infect(c, DISEASES.find(d => d.id === spreading));
     });
   }
 }
@@ -594,7 +602,7 @@ function infect(c, dis) {
   G.morale = clamp(G.morale - 6, 0, 100);
   sfx.bad();
   const medOpt = G.medkits > 0
-    ? [{ label: `Use a medkit (${G.medkits} left)`, fn: () => { G.medkits--; c.sick = null; sfx.good(); queueDialog("TREATED", `<span class="good">${c.name} is treated and recovering. Modern medicine: highly recommended.</span>`); afterDialogMaybe(); } },
+    ? [{ label: `Use a medkit (${G.medkits} left)`, fn: () => { G.medkits--; recoverFrom(c); sfx.good(); queueDialog("TREATED", `<span class="good">${c.name} is treated and recovering. Modern medicine: highly recommended.</span>`); afterDialogMaybe(); } },
        { label: "Tough it out", fn: () => afterDialogMaybe() }]
     : [{ label: "Tough it out (no medkits)", fn: () => afterDialogMaybe() }];
   queueDialog("ILLNESS", `<span class="bad">${c.name}${dis.catch}</span>`, medOpt);
@@ -810,9 +818,9 @@ function darienSail() {
   if (G.money < 800) { dialog("NOT ENOUGH MONEY", `The captain shrugs. No ${money(800)}, no boat. The sea is a business.`, [{ label: "Back", fn: () => darienGap() }]); return; }
   G.money -= 800; G.day += 7;
   let text = `Five days island-hopping through the San Blas archipelago. Postcard water. Fresh fish. Your vehicle follows on a cargo boat that the captain describes as "mostly reliable."`;
-  if (Math.random() < 0.35) {
-    const victim = pick(alive());
-    infect(victim, DISEASES.find(d => d.id === "noro"));
+  const susceptible = alive().filter(c => !c.sick && !isImmune(c, "noro"));
+  if (Math.random() < 0.35 && susceptible.length) {
+    infect(pick(susceptible), DISEASES.find(d => d.id === "noro"));
     text += `\n\n<span class="bad">The sea, however, wins a round.</span>`;
   }
   arriveDarien(text, 0);

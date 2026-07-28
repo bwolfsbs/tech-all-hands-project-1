@@ -163,7 +163,7 @@ const DISEASES = [
     regions:["jungle","centralam","coast"], weight:3, gear:"bugspray" },
   { id:"noro",      name:"norovirus",           dmg:3, days:4,
     catch:" caught norovirus. The hostel bathroom situation has become political.",
-    regions:null, weight:3, contagious:true },
+    regions:null, weight:3, contagious:true, immunizes:true },
   { id:"altitude",  name:"altitude sickness",   dmg:3, days:3,
     catch:" has altitude sickness. The Andes do not care about your cardio.",
     regions:["andes","rockies"], weight:5 },
