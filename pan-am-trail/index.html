@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The Pan-Am Trail</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div id="wrap">
+
+  <!-- TITLE -->
+  <div id="screen-title" class="screen">
+    <canvas id="title-canvas" width="640" height="200"></canvas>
+    <h1>THE PAN-AM TRAIL</h1>
+    <p class="sub">USHUAIA, ARGENTINA &rarr; PRUDHOE BAY, ALASKA &mdash; 25,300 KM</p>
+    <div class="menu">
+      <button data-key="1" onclick="startSetup()">1. Hit the road</button>
+      <button data-key="2" onclick="showScreen('screen-howto')">2. How to play</button>
+    </div>
+    <p class="tiny">a loving homage to a certain 8-bit wagon game</p>
+  </div>
+
+  <!-- HOW TO -->
+  <div id="screen-howto" class="screen">
+    <h2>HOW TO PLAY</h2>
+    <div class="box lefty">
+      <p>Drive the entire Pan-American Highway from the bottom of the world to the top. Keep your crew of five alive: manage money, fuel, food, spare parts, and morale.</p>
+      <p><b>KEYBOARD:</b> number keys pick menu options &middot; ENTER confirms / pauses &amp; resumes travel &middot; on the road: <b>R</b> rest, <b>F</b> forage, <b>P</b> pace, <b>N</b> rations, <b>S</b> status.</p>
+      <p><b>MOUSE:</b> click anything. In the forage minigame, click food. Do <b>not</b> click the snake.</p>
+      <p>Diseases are real out here: dysentery, dengue, norovirus, altitude sickness. Gear helps &mdash; a water filter, bug spray, a satellite phone.</p>
+      <p>At the Dari&eacute;n Gap the road simply stops. You will have to make a choice. People have regretted all three.</p>
+    </div>
+    <div class="menu"><button data-key="1" onclick="showScreen('screen-title')">1. Back</button></div>
+  </div>
+
+  <!-- SETUP (dynamic) -->
+  <div id="screen-setup" class="screen">
+    <div id="setup-body"></div>
+  </div>
+
+  <!-- TRAVEL -->
+  <div id="screen-travel" class="screen">
+    <canvas id="game-canvas" width="640" height="360"></canvas>
+    <div id="hud">
+      <div id="hud-row1">
+        <span id="hud-date"></span>
+        <span id="hud-weather"></span>
+        <span id="hud-next"></span>
+      </div>
+      <div id="hud-row2">
+        <span id="hud-money"></span>
+        <span id="hud-fuel"></span>
+        <span id="hud-food"></span>
+        <span id="hud-parts"></span>
+        <span id="hud-health"></span>
+      </div>
+      <div id="progress"><div id="progress-fill"></div><div id="progress-dots"></div></div>
+    </div>
+    <div id="travel-buttons">
+      <button data-key="Enter" id="btn-go" onclick="togglePause()">&#9658; GO</button>
+      <button data-key="r" onclick="restDay()">R. Rest</button>
+      <button data-key="f" onclick="startForage()">F. Forage</button>
+      <button data-key="p" onclick="cyclePace()">P. Pace</button>
+      <button data-key="n" onclick="cycleRations()">N. Rations</button>
+      <button data-key="s" onclick="showStatus()">S. Status</button>
+    </div>
+  </div>
+
+  <!-- END -->
+  <div id="screen-end" class="screen">
+    <div id="end-body"></div>
+  </div>
+
+  <!-- DIALOG OVERLAY -->
+  <div id="dialog-overlay" class="hidden">
+    <div id="dialog">
+      <h3 id="dialog-title"></h3>
+      <div id="dialog-text"></div>
+      <div id="dialog-options" class="menu"></div>
+    </div>
+  </div>
+
+</div>
+<script src="data.js"></script>
+<script src="game.js"></script>
+</body>
+</html>
